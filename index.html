@@ -100,6 +100,12 @@ button{font:inherit;cursor:pointer;border:0}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .foot{text-align:center;color:#ffffffcc;font-size:11px;padding:6px}
 .confirm p{margin:0 0 6px;font-size:15px}
+.lab{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:2px 0 4px}
+.edu{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);background:none;padding:0;margin-top:1px;text-align:left}
+.edu.set{color:#128c7e;font-weight:700}
+.opt{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border-radius:14px;background:#f4f7fb;margin-bottom:10px;text-align:left;text-decoration:none;color:var(--ink)}
+.opt .ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;flex:none}
+.opt b{display:block;font-size:15px}.opt span{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -146,6 +152,24 @@ button{font:inherit;cursor:pointer;border:0}
   <div class="shh"><h3 id="pvTitle">Fiche</h3><button class="x" data-close="shPrev">✕</button></div>
   <div class="shb prev"><img id="pvImg" alt="Fiche A6"><p class="tip" id="pvTip"></p><textarea class="txt" id="pvTxt" readonly></textarea></div>
   <div class="shf" id="pvBtns"></div>
+</div></div>
+
+<!-- Éducateur de l'équipe -->
+<div class="sheet" id="shEdu"><div class="sh">
+  <div class="shh"><h3 id="edTitle">Éducateur</h3><button class="x" data-close="shEdu">✕</button></div>
+  <div class="shb">
+    <label class="lab">Nom de l’éducateur</label><input class="search" id="edNom" placeholder="Ex. Julien" autocomplete="off">
+    <label class="lab">N° de téléphone</label><input class="search" id="edTel" type="tel" inputmode="tel" placeholder="06 12 34 56 78" autocomplete="off">
+    <button class="btn light full" id="edContacts" hidden>📇 Choisir dans mes contacts</button>
+    <p class="hint" style="margin-top:10px">Enregistré sur ce téléphone pour cette équipe : il sera réutilisé aux prochains plateaux.</p>
+  </div>
+  <div class="shf"><button class="btn light" id="edDel">Effacer</button><button class="btn" id="edOk" style="flex:1">✔ Enregistrer</button></div>
+</div></div>
+
+<!-- Choix du mode d'envoi -->
+<div class="sheet" id="shSend"><div class="sh">
+  <div class="shh"><h3 id="sdTitle">Envoyer</h3><button class="x" data-close="shSend">✕</button></div>
+  <div class="shb" id="sdBody"></div>
 </div></div>
 
 <!-- Confirmation -->
@@ -220,6 +244,13 @@ const logoHtml=(n,col)=>logoOf(n)?'<img src="'+logoOf(n)+'" alt="">':'<span clas
 let S={nom:'',org:'',clubs:[],perm:null,sig:'',sent:{},vue:'rot'};let latest=null;
 try{const l=JSON.parse(localStorage.getItem(KEY)||'null');if(l&&Array.isArray(l.clubs))S=Object.assign(S,l)}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+/* Éducateurs : nom + téléphone par équipe (ex. « Aune A »), gardés d'un plateau à l'autre */
+const EKEY='plateauU9_educateurs';let EDU={};try{EDU=JSON.parse(localStorage.getItem(EKEY)||'{}')||{}}catch(e){}
+const saveEdu=()=>{try{localStorage.setItem(EKEY,JSON.stringify(EDU))}catch(e){}};
+const eduOf=t=>EDU[low(t.name)]||null;
+/* 06 12 34 56 78 → 33612345678 (format international sans +, pour WhatsApp) */
+function intl(tel){let d=String(tel||'').replace(/[^\d+]/g,'');if(d.startsWith('+'))d=d.slice(1);else if(d.startsWith('00'))d=d.slice(2);else if(/^0[1-9]\d{8}$/.test(d))d='33'+d.slice(1);return d}
+const prettyTel=tel=>{const d=String(tel||'').replace(/\D/g,'');return/^0\d{9}$/.test(d)?d.replace(/(\d{2})(?=\d)/g,'$1 '):tel};
 $('hLogo').src=D.district||'';
 
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2600)}
@@ -317,7 +348,7 @@ const safeName=s=>String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A
 /* ===== Bloc 3 : envoi ===== */
 function drawSend(){const d=latest;if(!d)return;const n=d.teams.length,ns=d.teams.filter(t=>S.sent[t.name]).length;
 $('sendInfo').textContent=ns+' / '+n+' envoyées';$('progBar').style.width=(100*ns/n)+'%';
-$('teams').innerHTML=d.teams.map(t=>'<div class="tr'+(S.sent[t.name]?' sent':'')+'" data-id="'+t.id+'">'+logoHtml(t.club,t.color)+'<div class="nm"><b>'+esc(t.name)+'</b><span>'+(S.sent[t.name]?'✓ Envoyée':'À envoyer')+'</span></div><button class="btn eye" data-a="voir" aria-label="Voir la fiche">👁</button><button class="btn" data-a="env">📤 Envoyer</button></div>').join('')}
+$('teams').innerHTML=d.teams.map(t=>'<div class="tr'+(S.sent[t.name]?' sent':'')+'" data-id="'+t.id+'">'+logoHtml(t.club,t.color)+'<div class="nm"><b>'+esc(t.name)+'</b><button class="edu'+(eduOf(t)?' set':'')+'" data-a="edu">'+(eduOf(t)?'👤 '+esc(eduOf(t).nom||prettyTel(eduOf(t).tel)):'➕ Ajouter l’éducateur')+'</button><span>'+(S.sent[t.name]?'✓ Envoyée':'')+'</span></div><button class="btn eye" data-a="voir" aria-label="Voir la fiche">👁</button><button class="btn" data-a="env">📤 Envoyer</button></div>').join('')}
 const canShareFiles=()=>{try{return!!(navigator.canShare&&navigator.canShare({files:[new File([new Blob(['x'])],'t.png',{type:'image/png'})]}))}catch(e){return false}};
 async function blobOf(t){const cv=await ficheCanvas(t);return new Promise(r=>cv.toBlob(r,'image/png'))}
 function markSent(t){S.sent[t.name]=1;save();drawSend()}
@@ -335,9 +366,26 @@ $('pvBtns').innerHTML=(share?'<button class="btn" id="pvShare" style="flex:1">�
 if(share)$('pvShare').onclick=()=>{closeSh('shPrev');envoyer(t)};
 $('pvWa').onclick=()=>markSent(t);$('pvSms').onclick=()=>markSent(t);
 $('pvCopy').onclick=async()=>{try{await navigator.clipboard.writeText(txt);toast('Texte copié')}catch(e){$('pvTxt').select();toast('Sélectionnez le texte puis copiez')}}}
-$('teams').addEventListener('click',e=>{const b=e.target.closest('button');const row=e.target.closest('.tr');if(!b||!row)return;const t=latest.teams[+row.dataset.id];if(b.dataset.a==='voir')voir(t);else envoyer(t)});
-$('sendHint').textContent=canShareFiles()?'Touchez « Envoyer » : choisissez WhatsApp ou Messages, puis l’éducateur de l’équipe.':'Touchez « Envoyer » pour voir la fiche et l’envoyer par WhatsApp ou SMS.';
+$('teams').addEventListener('click',e=>{const b=e.target.closest('button');const row=e.target.closest('.tr');if(!b||!row)return;const t=latest.teams[+row.dataset.id];if(b.dataset.a==='voir')voir(t);else if(b.dataset.a==='edu')editEdu(t);else choisirEnvoi(t)});
+$('sendHint').textContent='Ajoutez une fois l’éducateur de chaque équipe (➕), puis touchez « Envoyer » : WhatsApp ou SMS directement vers son numéro.';
 
+/* Fiche éducateur */
+let edT=null;
+function editEdu(t){edT=t;const e=eduOf(t)||{};$('edTitle').textContent='Éducateur · '+t.name;$('edNom').value=e.nom||'';$('edTel').value=e.tel||'';$('edDel').hidden=!eduOf(t);openSh('shEdu');setTimeout(()=>$('edNom').focus(),80)}
+$('edOk').addEventListener('click',()=>{const nom=$('edNom').value.trim(),tel=$('edTel').value.trim();if(!nom&&!tel){delete EDU[low(edT.name)]}else EDU[low(edT.name)]={nom,tel};saveEdu();closeSh('shEdu');drawSend();toast('Éducateur enregistré')});
+$('edDel').addEventListener('click',()=>{delete EDU[low(edT.name)];saveEdu();closeSh('shEdu');drawSend()});
+if('contacts' in navigator&&'select' in navigator.contacts){$('edContacts').hidden=false;$('edContacts').addEventListener('click',async()=>{try{const r=await navigator.contacts.select(['name','tel'],{multiple:false});if(r&&r[0]){if(r[0].name&&r[0].name[0])$('edNom').value=r[0].name[0];if(r[0].tel&&r[0].tel[0])$('edTel').value=r[0].tel[0]}}catch(e){}})}
+/* Choix du mode d'envoi */
+async function copyImage(t){try{if(!(navigator.clipboard&&window.ClipboardItem))return false;const b=await blobOf(t);await navigator.clipboard.write([new ClipboardItem({'image/png':b})]);return true}catch(e){return false}}
+function choisirEnvoi(t){const e=eduOf(t);if(!e||!e.tel){if(!e)toast('Astuce : ajoutez le n° de l’éducateur pour l’envoi direct');envoyer(t);return}
+const txt=ficheText(t),num=intl(e.tel),who=esc(e.nom||prettyTel(e.tel));$('sdTitle').textContent='Envoyer à '+(e.nom||prettyTel(e.tel));
+$('sdBody').innerHTML=(canShareFiles()?'<button class="opt" id="sdImg"><span class="ic" style="background:#2e7d32">🖼️</span><div><b>Image de la fiche</b><span>WhatsApp ou Messages, puis choisir '+who+'</span></div></button>':'')+
+'<a class="opt" id="sdWa" href="https://wa.me/'+num+'?text='+encodeURIComponent(txt)+'" target="_blank" rel="noopener"><span class="ic" style="background:#25d366">💬</span><div><b>WhatsApp direct</b><span>Conversation avec '+who+' ouverte, fiche en texte</span></div></a>'+
+'<a class="opt" id="sdSms" href="sms:'+encodeURIComponent(e.tel.replace(/\s/g,''))+'?&body='+encodeURIComponent(txt)+'"><span class="ic" style="background:#3b82f6">✉️</span><div><b>SMS direct</b><span>'+esc(prettyTel(e.tel))+' · fiche en texte</span></div></a>';
+openSh('shSend');
+if($('sdImg'))$('sdImg').onclick=()=>{closeSh('shSend');envoyer(t)};
+$('sdWa').onclick=()=>{copyImage(t).then(ok=>{if(ok)toast('Image copiée : appui long → Coller dans la conversation')});markSent(t);closeSh('shSend')};
+$('sdSms').onclick=()=>{markSent(t);closeSh('shSend')}}
 function drawAll(){drawClubs();drawPlan();drawSend()}
 generate(false);
 </script>
