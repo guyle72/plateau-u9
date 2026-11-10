@@ -125,6 +125,7 @@ button{font:inherit;cursor:pointer;border:0}
     <h2><span class="n">2</span>Envoyer les fiches <span class="r" id="sendInfo"></span></h2>
     <div class="in">
       <p class="hint" id="sendHint">Touchez « Envoyer » : choisissez WhatsApp ou Messages, puis l’éducateur de l’équipe.</p>
+      <button class="btn full" id="bAll" style="margin-bottom:10px">📦 Envoyer toutes les fiches</button>
       <div class="prog"><i id="progBar"></i></div>
       <div id="teams"></div>
     </div>
@@ -170,6 +171,19 @@ button{font:inherit;cursor:pointer;border:0}
 <div class="sheet" id="shSend"><div class="sh">
   <div class="shh"><h3 id="sdTitle">Envoyer</h3><button class="x" data-close="shSend">✕</button></div>
   <div class="shb" id="sdBody"></div>
+</div></div>
+
+<!-- Envoi groupé -->
+<div class="sheet" id="shAll"><div class="sh">
+  <div class="shh"><h3>Envoyer toutes les fiches</h3><button class="x" data-close="shAll">✕</button></div>
+  <div class="shb" id="allBody"></div>
+</div></div>
+
+<!-- Envoi en série : équipe suivante -->
+<div class="sheet" id="shNext"><div class="sh">
+  <div class="shh"><h3 id="nxTitle">Fiche suivante</h3><button class="x" id="nxStop">✕</button></div>
+  <div class="shb" id="nxBody"></div>
+  <div class="shf"><button class="btn light" id="nxSkip">Passer</button><button class="btn" id="nxGo" style="flex:1">💬 Envoyer</button></div>
 </div></div>
 
 <!-- Confirmation -->
@@ -406,8 +420,41 @@ openSh('shSend');
 $('sdWaImg').onclick=()=>envoiImage(t,'wa');$('sdSmsImg').onclick=()=>envoiImage(t,'sms');
 if($('sdImg'))$('sdImg').onclick=()=>{closeSh('shSend');envoyer(t)};
 $('sdWa').onclick=()=>{markSent(t);closeSh('shSend')};$('sdSms').onclick=()=>{markSent(t);closeSh('shSend')}}
+/* ===== Envoi groupé ===== */
+const SKEY='plateauU9_serie';
+const getSerie=()=>{try{return JSON.parse(localStorage.getItem(SKEY)||'null')}catch(e){return null}};
+const setSerie=q=>{try{q?localStorage.setItem(SKEY,JSON.stringify(q)):localStorage.removeItem(SKEY)}catch(e){}};
+$('bAll').addEventListener('click',()=>{const d=latest;if(!d)return;const withTel=d.teams.filter(t=>eduOf(t)&&eduOf(t).tel),todo=withTel.filter(t=>!S.sent[t.name]),sans=d.teams.filter(t=>!(eduOf(t)&&eduOf(t).tel));
+$('allBody').innerHTML=
+(canShareFiles()?'<button class="opt" id="alGroup"><span class="ic" style="background:#25d366">👥</span><div><b>Toutes les images d’un coup dans un groupe</b><span>Les '+d.teams.length+' fiches partent ensemble vers un groupe WhatsApp (ex. « Éducateurs U9 ») : chacun y trouve la sienne</span></div></button>':
+'<a class="opt" id="alGroup" href="https://wa.me/?text='+encodeURIComponent(groupText())+'" target="_blank" rel="noopener"><span class="ic" style="background:#25d366">👥</span><div><b>Toutes les fiches dans un groupe WhatsApp</b><span>Un seul message avec le lien de la fiche (image) de chaque équipe</span></div></a>')+
+'<button class="opt" id="alSerie"'+(withTel.length?'':' disabled style="opacity:.5"')+'><span class="ic" style="background:#3b82f6">🔁</span><div><b>À chaque éducateur, à la suite</b><span>'+(withTel.length?todo.length+' fiche'+(todo.length>1?'s':'')+' à envoyer : l’appli enchaîne les conversations, il suffit de coller l’image et revenir':'Ajoutez d’abord les n° des éducateurs (➕)')+'</span></div></button>'+
+(sans.length?'<p class="hint">Sans n° enregistré (non concernées par l’envoi à la suite) : '+sans.map(t=>esc(t.name)).join(', ')+'</p>':'');
+openSh('shAll');
+const g=$('alGroup');if(g.tagName==='BUTTON')g.onclick=envoiGroupe;else g.onclick=()=>{d.teams.forEach(t=>S.sent[t.name]=1);save();drawSend();closeSh('shAll')};
+$('alSerie').onclick=()=>{if(!withTel.length)return;const q=(todo.length?todo:withTel).map(t=>t.name);closeSh('shAll');setSerie({q,i:0});nextSerie()}});
+function groupText(){let s='⚽ *'+plName()+'*\nFiches des équipes (touchez le lien de votre équipe) :\n';latest.teams.forEach(t=>{s+='\n• '+t.name+' : '+ficheLink(t)});if(S.org)s+='\n\n🏠 Organisation : '+S.org;return s}
+async function envoiGroupe(){const btn=$('alGroup');btn.disabled=true;btn.querySelector('b').textContent='Préparation des images…';
+try{const files=[];for(const t of latest.teams){const b=await blobOf(t);files.push(new File([b],'Fiche_'+safeName(t.name)+'.png',{type:'image/png'}))}
+await navigator.share({files,title:'Fiches '+plName(),text:'⚽ '+plName()+' : la fiche de chaque équipe'});latest.teams.forEach(t=>S.sent[t.name]=1);save();drawSend();closeSh('shAll');toast('Fiches envoyées')}
+catch(e){btn.disabled=false;btn.querySelector('b').textContent='Toutes les images d’un coup dans un groupe';if(!(e&&e.name==='AbortError'))toast('Envoi groupé impossible ici')}}
+/* Série : une équipe après l'autre ; au retour dans l'appli, la suivante est proposée */
+function nextSerie(){const sr=getSerie();if(!sr||!latest){closeSh('shNext');return}
+while(sr.i<sr.q.length){const t=latest.teams.find(x=>x.name===sr.q[sr.i]);if(t&&eduOf(t)&&eduOf(t).tel)break;sr.i++}
+if(sr.i>=sr.q.length){setSerie(null);closeSh('shNext');toast('✔ Toutes les fiches ont été envoyées');return}
+setSerie(sr);const t=latest.teams.find(x=>x.name===sr.q[sr.i]),e=eduOf(t);
+$('nxTitle').textContent='Fiche '+(sr.i+1)+' / '+sr.q.length;
+$('nxBody').innerHTML='<div class="tr" style="border:0">'+logoHtml(t.club,t.color)+'<div class="nm"><b>'+esc(t.name)+'</b><span style="color:#128c7e;font-weight:700">👤 '+esc(e.nom||'')+' · '+esc(prettyTel(e.tel))+'</span></div></div><p class="hint" style="margin-top:8px">WhatsApp s’ouvre sur sa conversation : <b>appui long → Coller</b>, Envoyer, puis revenez ici pour la suivante.</p>'+
+'<div class="row2"><button class="btn light" id="nxSms">✉️ Plutôt par SMS</button></div>';
+$('nxGo').innerHTML='💬 Envoyer à '+esc(e.nom||prettyTel(e.tel));openSh('shNext');
+$('nxSms').onclick=()=>{sr.i++;setSerie(sr);envoiImage(t,'sms')};
+$('nxGo').onclick=()=>{sr.i++;setSerie(sr);envoiImage(t,'wa')}}
+$('nxSkip').addEventListener('click',()=>{const sr=getSerie();if(sr){sr.i++;setSerie(sr)}nextSerie()});
+$('nxStop').addEventListener('click',()=>{setSerie(null);closeSh('shNext');toast('Envoi à la suite arrêté')});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&getSerie())setTimeout(nextSerie,400)});
 function drawAll(){drawClubs();drawPlan();drawSend()}
 generate(false);
+if(getSerie())setTimeout(nextSerie,600);
 </script>
 </body>
 </html>
