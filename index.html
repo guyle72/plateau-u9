@@ -307,40 +307,50 @@ $('planHead').addEventListener('click',()=>{const b=$('planBody');b.hidden=!b.hi
 $('vR').addEventListener('click',()=>{S.vue='rot';save();drawPlan()});$('vT').addEventListener('click',()=>{S.vue='ter';save();drawPlan()});
 $('bRegen').addEventListener('click',()=>{generate(true);toast('Nouveau planning tiré')});
 
-/* ===== Fiche A6 dessinée en image (1050 × 1485 px) ===== */
+/* ===== Fiche A6 dessinée en image (1050 × 1485 px) — partagée par l'appli et la page « fiche » =====
+   Modèle : {p: nom du plateau, o: club organisateur, n: équipe, c: club de l'équipe, k: couleur,
+             r: [[début, fin, terrain (0 = atelier), adversaire ou n° de zone, club adverse], ...]} */
 const imgCache={};
 function loadImg(src){if(!src)return Promise.resolve(null);if(imgCache[src])return imgCache[src];return imgCache[src]=new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=src})}
 function rrect(x,c,y,w,h,r){x.beginPath();x.moveTo(c+r,y);x.arcTo(c+w,y,c+w,y+h,r);x.arcTo(c+w,y+h,c,y+h,r);x.arcTo(c,y+h,c,y,r);x.arcTo(c,y,c+w,y,r);x.closePath()}
 function fitText(x,t,maxW,size,weight,min){let s=size;do{x.font=weight+' '+s+'px system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif';if(x.measureText(t).width<=maxW)break;s-=1}while(s>min);return s}
 function drawLogo(x,img,cx,cy,box){if(!img)return;const k=Math.min(box/img.width,box/img.height);const w=img.width*k,h=img.height*k;x.drawImage(img,cx-w/2,cy-h/2,w,h)}
 function shade(hex,f){const m=/^#?([0-9a-f]{6})$/i.exec(hex||'');if(!m)return hex;const v=parseInt(m[1],16);const c=[v>>16,(v>>8)&255,v&255].map(u=>Math.round(f<0?u*(1+f):u+(255-u)*f));return'rgb('+c.join(',')+')'}
-async function ficheCanvas(t){const d=latest,W=1050,H=1485,cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d');
+function clubLogo(n){const L=(window.PU9_DATA&&window.PU9_DATA.clubs)||[],k=String(n||'').trim().toLocaleLowerCase('fr');const c=L.find(z=>z.nom.trim().toLocaleLowerCase('fr')===k);return c?c.logo:''}
+async function drawFiche(M){const W=1050,H=1485,cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d');
 x.fillStyle='#fff';x.fillRect(0,0,W,H);
-const col=/^#[0-9a-f]{6}$/i.test(t.color)?t.color:'#2e7d32';const P=44;
-/* en-tête */
+const col=/^#[0-9a-f]{6}$/i.test(M.k)?M.k:'#2e7d32';const P=44,district=(window.PU9_DATA||{}).district;
 const hh=410;const g=x.createLinearGradient(0,0,W,0);g.addColorStop(0,shade(col,-.35));g.addColorStop(1,col);x.fillStyle=g;rrect(x,P,P,W-2*P,hh,34);x.fill();
-const [dl,cl,ol]=await Promise.all([loadImg(D.district),loadImg(logoOf(t.club)),loadImg(logoOf(S.org))]);
+const [dl,cl,ol]=await Promise.all([loadImg(district),loadImg(clubLogo(M.c)),loadImg(clubLogo(M.o))]);
 x.fillStyle='#fff';rrect(x,P+26,P+24,150,150,26);x.fill();drawLogo(x,dl,P+101,P+99,124);
 if(cl){x.fillStyle='#fff';rrect(x,W-P-26-210,P+24,210,150,26);x.fill();drawLogo(x,cl,W-P-26-105,P+99,128)}
-x.fillStyle='#fff';x.textBaseline='alphabetic';const ns=fitText(x,t.name,W-2*P-60,92,'800',40);x.fillText(t.name,P+30,P+24+150+30+ns*.78);
-const sub=plName()+' · Football U9';fitText(x,sub,W-2*P-60,30,'600',18);x.globalAlpha=.9;x.fillText(sub,P+30,P+hh-30);x.globalAlpha=1;
-/* tableau */
+x.fillStyle='#fff';x.textBaseline='alphabetic';const ns=fitText(x,M.n,W-2*P-60,92,'800',40);x.fillText(M.n,P+30,P+24+150+30+ns*.78);
+const sub=M.p+' · Football U9';fitText(x,sub,W-2*P-60,30,'600',18);x.globalAlpha=.9;x.fillText(sub,P+30,P+hh-30);x.globalAlpha=1;
 let y=P+hh+70;x.fillStyle='#7d8aa1';x.font='800 26px system-ui,Arial,sans-serif';const cT=P+18,cO=P+230,cC=P+430;
 x.fillText('HORAIRE',cT,y);x.fillText('OÙ',cO,y);x.fillText('CONTRE',cC,y);y+=22;x.fillStyle='#d9e1ec';x.fillRect(P,y,W-2*P,3);
-const foot=200,rowsH=H-P-foot-y-10,rh=Math.min(170,rowsH/d.plan.length);
-for(const r of d.plan){const m=r.matches.find(z=>z.a.id===t.id||z.b.id===t.id);const cy=y+rh/2;
-x.fillStyle='#14213d';x.font='800 40px system-ui,Arial,sans-serif';x.textBaseline='middle';x.fillText(r.start+'–'+r.end+'′',cT,cy);
-if(m){const o=m.a.id===t.id?m.b:m.a;x.font='500 38px system-ui,Arial,sans-serif';x.fillText('Terrain '+m.pitch,cO,cy);
-const oi=await loadImg(logoOf(o.club));let tx=cC;if(oi){drawLogo(x,oi,cC+30,cy,60);tx=cC+76}x.fillStyle='#14213d';fitText(x,o.name,W-P-tx-10,40,'800',22);x.fillText(o.name,tx,cy)}
-else{x.fillStyle='#7d8aa1';x.font='italic 600 36px system-ui,Arial,sans-serif';x.fillText('Atelier · zone '+(r.matches.length+1),cO,cy)}
+const foot=200,rowsH=H-P-foot-y-10,rh=Math.min(170,rowsH/M.r.length);
+for(const [s,e,pt,on,oc] of M.r){const cy=y+rh/2;
+x.fillStyle='#14213d';x.font='800 40px system-ui,Arial,sans-serif';x.textBaseline='middle';x.fillText(s+'–'+e+'′',cT,cy);
+if(pt){x.font='500 38px system-ui,Arial,sans-serif';x.fillText('Terrain '+pt,cO,cy);
+const oi=await loadImg(clubLogo(oc));let tx=cC;if(oi){drawLogo(x,oi,cC+30,cy,60);tx=cC+76}x.fillStyle='#14213d';fitText(x,on,W-P-tx-10,40,'800',22);x.fillText(on,tx,cy)}
+else{x.fillStyle='#7d8aa1';x.font='italic 600 36px system-ui,Arial,sans-serif';x.fillText('Atelier · zone '+on,cO,cy)}
 y+=rh;x.fillStyle='#e8edf4';x.fillRect(P,y-1,W-2*P,2)}
-/* pied : organisation */
 x.fillStyle='#c9d3e1';x.fillRect(P,H-P-foot+30,W-2*P,3);
-if(S.org){const fy=H-P-foot/2+20,lab='Organisation du plateau :';x.textBaseline='middle';x.font='600 30px system-ui,Arial,sans-serif';const lw=x.measureText(lab).width;
-x.font='800 36px system-ui,Arial,sans-serif';const nw=x.measureText(S.org).width,lg=ol?90:0,tot=lw+20+lg+(lg?16:0)+nw;let sx=(W-tot)/2;
-x.fillStyle='#66758f';x.font='600 30px system-ui,Arial,sans-serif';x.fillText(lab,sx,fy);sx+=lw+20;if(ol){drawLogo(x,ol,sx+lg/2,fy,80);sx+=lg+16}x.fillStyle='#14213d';x.font='800 36px system-ui,Arial,sans-serif';x.fillText(S.org,sx,fy)}
+if(M.o){const fy=H-P-foot/2+20,lab='Organisation du plateau :';x.textBaseline='middle';x.font='600 30px system-ui,Arial,sans-serif';const lw=x.measureText(lab).width;
+x.font='800 36px system-ui,Arial,sans-serif';const nw=x.measureText(M.o).width,lg=ol?90:0,tot=lw+20+lg+(lg?16:0)+nw;let sx=(W-tot)/2;
+x.fillStyle='#66758f';x.font='600 30px system-ui,Arial,sans-serif';x.fillText(lab,sx,fy);sx+=lw+20;if(ol){drawLogo(x,ol,sx+lg/2,fy,80);sx+=lg+16}x.fillStyle='#14213d';x.font='800 36px system-ui,Arial,sans-serif';x.fillText(M.o,sx,fy)}
 return cv}
-function ficheText(t){const d=latest;let s='⚽ *'+plName()+'*\nÉquipe : *'+t.name+'*\n\n';
+/* Modèle ⇄ lien court (base64 URL-safe dans le # de l'adresse) */
+function encodeFiche(M){const b=new TextEncoder().encode(JSON.stringify(M));let s='';b.forEach(c=>s+=String.fromCharCode(c));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function decodeFiche(h){try{let s=h.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const bin=atob(s),b=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return JSON.parse(new TextDecoder().decode(b))}catch(e){return null}}
+
+/* Modèle de fiche d'une équipe (pour l'image et le lien) */
+function ficheModel(t){const d=latest;return{p:plName(),o:S.org,n:t.name,c:t.club,k:t.color,r:d.plan.map(r=>{const m=r.matches.find(z=>z.a.id===t.id||z.b.id===t.id);if(!m)return[r.start,r.end,0,String(r.matches.length+1),''];const o=m.a.id===t.id?m.b:m.a;return[r.start,r.end,m.pitch,o.name,o.club]})}}
+const ficheCanvas=t=>drawFiche(ficheModel(t));
+/* Lien vers la fiche en image, consultable par l'éducateur sur son téléphone */
+const SITE=/^https?:$/.test(location.protocol)&&!/claude\.ai|claudeusercontent/.test(location.host)?location.href.replace(/[#?].*$/,'').replace(/[^\/]*$/,''):'https://guyle72.github.io/plateau-u9/';
+const ficheLink=t=>SITE+'fiche.html#'+encodeFiche(ficheModel(t));
+function ficheText(t,withLink){const d=latest,e=eduOf(t);let s=(e&&e.nom?'Bonjour '+e.nom+' 👋\n':'')+'⚽ *'+plName()+'*\nÉquipe : *'+t.name+'*\n'+(withLink?'🖼️ Fiche (image) : '+ficheLink(t)+'\n':'')+'\n';
 d.plan.forEach(r=>{const m=r.matches.find(z=>z.a.id===t.id||z.b.id===t.id);s+='🕑 '+r.start+'–'+r.end+'′ · '+(m?'Terrain '+m.pitch+' · contre '+(m.a.id===t.id?m.b:m.a).name:'Atelier (zone '+(r.matches.length+1)+')')+'\n'});
 if(S.org)s+='\n🏠 Organisation : '+S.org;return s}
 const safeName=s=>String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
@@ -367,7 +377,7 @@ if(share)$('pvShare').onclick=()=>{closeSh('shPrev');envoyer(t)};
 $('pvWa').onclick=()=>markSent(t);$('pvSms').onclick=()=>markSent(t);
 $('pvCopy').onclick=async()=>{try{await navigator.clipboard.writeText(txt);toast('Texte copié')}catch(e){$('pvTxt').select();toast('Sélectionnez le texte puis copiez')}}}
 $('teams').addEventListener('click',e=>{const b=e.target.closest('button');const row=e.target.closest('.tr');if(!b||!row)return;const t=latest.teams[+row.dataset.id];if(b.dataset.a==='voir')voir(t);else if(b.dataset.a==='edu')editEdu(t);else choisirEnvoi(t)});
-$('sendHint').textContent='Ajoutez une fois l’éducateur de chaque équipe (➕), puis touchez « Envoyer » : WhatsApp ou SMS directement vers son numéro.';
+$('sendHint').textContent='Ajoutez une fois l’éducateur de chaque équipe (➕), puis « Envoyer » : la conversation WhatsApp ou SMS s’ouvre sur son numéro, il reste à coller l’image (appui long → Coller) et envoyer.';
 
 /* Fiche éducateur */
 let edT=null;
@@ -376,16 +386,26 @@ $('edOk').addEventListener('click',()=>{const nom=$('edNom').value.trim(),tel=$(
 $('edDel').addEventListener('click',()=>{delete EDU[low(edT.name)];saveEdu();closeSh('shEdu');drawSend()});
 if('contacts' in navigator&&'select' in navigator.contacts){$('edContacts').hidden=false;$('edContacts').addEventListener('click',async()=>{try{const r=await navigator.contacts.select(['name','tel'],{multiple:false});if(r&&r[0]){if(r[0].name&&r[0].name[0])$('edNom').value=r[0].name[0];if(r[0].tel&&r[0].tel[0])$('edTel').value=r[0].tel[0]}}catch(e){}})}
 /* Choix du mode d'envoi */
-async function copyImage(t){try{if(!(navigator.clipboard&&window.ClipboardItem))return false;const b=await blobOf(t);await navigator.clipboard.write([new ClipboardItem({'image/png':b})]);return true}catch(e){return false}}
+/* Image de la fiche dans le presse-papiers (dans le geste du doigt, exigé par iPhone et Android) */
+async function copyImage(t){if(!(navigator.clipboard&&navigator.clipboard.write&&window.ClipboardItem))return false;
+try{await navigator.clipboard.write([new ClipboardItem({'image/png':blobOf(t)})]);return true}catch(e){try{const b=await blobOf(t);await navigator.clipboard.write([new ClipboardItem({'image/png':b})]);return true}catch(e2){return false}}}
+/* Envoi de l'IMAGE à l'éducateur : image copiée, puis conversation WhatsApp / SMS ouverte sur son numéro → appui long, Coller */
+async function envoiImage(t,via){const e=eduOf(t),num=intl(e.tel),cap='Fiche '+t.name+' – '+plName()+'\n🖼️ '+ficheLink(t);
+const url=via==='wa'?'https://wa.me/'+num+'?text='+encodeURIComponent(cap):'sms:'+encodeURIComponent(e.tel.replace(/\s/g,''))+'?&body='+encodeURIComponent(cap);
+const ok=await copyImage(t);closeSh('shSend');
+if(!ok){toast('Copie de l’image impossible ici : partage de l’image');envoyer(t);return}
+markSent(t);try{localStorage.setItem('plateauU9_coller','1')}catch(x){}location.href=url}
 function choisirEnvoi(t){const e=eduOf(t);if(!e||!e.tel){if(!e)toast('Astuce : ajoutez le n° de l’éducateur pour l’envoi direct');envoyer(t);return}
-const txt=ficheText(t),num=intl(e.tel),who=esc(e.nom||prettyTel(e.tel));$('sdTitle').textContent='Envoyer à '+(e.nom||prettyTel(e.tel));
-$('sdBody').innerHTML=(canShareFiles()?'<button class="opt" id="sdImg"><span class="ic" style="background:#2e7d32">🖼️</span><div><b>Image de la fiche</b><span>WhatsApp ou Messages, puis choisir '+who+'</span></div></button>':'')+
-'<a class="opt" id="sdWa" href="https://wa.me/'+num+'?text='+encodeURIComponent(txt)+'" target="_blank" rel="noopener"><span class="ic" style="background:#25d366">💬</span><div><b>WhatsApp direct</b><span>Conversation avec '+who+' ouverte, fiche en texte</span></div></a>'+
-'<a class="opt" id="sdSms" href="sms:'+encodeURIComponent(e.tel.replace(/\s/g,''))+'?&body='+encodeURIComponent(txt)+'"><span class="ic" style="background:#3b82f6">✉️</span><div><b>SMS direct</b><span>'+esc(prettyTel(e.tel))+' · fiche en texte</span></div></a>';
+const txt=ficheText(t,true),num=intl(e.tel),who=esc(e.nom||prettyTel(e.tel));$('sdTitle').textContent='Envoyer à '+(e.nom||prettyTel(e.tel));
+$('sdBody').innerHTML=
+'<button class="opt" id="sdWaImg"><span class="ic" style="background:#25d366">💬</span><div><b>WhatsApp · image de la fiche</b><span>La conversation avec '+who+' s’ouvre : <b style="display:inline;font-size:12px">appui long → Coller</b> puis Envoyer</span></div></button>'+
+'<button class="opt" id="sdSmsImg"><span class="ic" style="background:#3b82f6">✉️</span><div><b>SMS / MMS · image de la fiche</b><span>Le SMS vers '+esc(prettyTel(e.tel))+' s’ouvre : <b style="display:inline;font-size:12px">appui long → Coller</b> puis Envoyer</span></div></button>'+
+(canShareFiles()?'<button class="opt" id="sdImg"><span class="ic" style="background:#2e7d32">🖼️</span><div><b>Partager l’image</b><span>Menu de partage du téléphone, puis choisir '+who+'</span></div></button>':'')+
+'<p class="hint" style="margin:6px 2px 4px">Texte seul (sans image) :</p><div class="row2"><a class="btn light" id="sdWa" style="text-decoration:none" href="https://wa.me/'+num+'?text='+encodeURIComponent(txt)+'" target="_blank" rel="noopener">WhatsApp</a><a class="btn light" id="sdSms" style="text-decoration:none" href="sms:'+encodeURIComponent(e.tel.replace(/\s/g,''))+'?&body='+encodeURIComponent(txt)+'">SMS</a></div>';
 openSh('shSend');
+$('sdWaImg').onclick=()=>envoiImage(t,'wa');$('sdSmsImg').onclick=()=>envoiImage(t,'sms');
 if($('sdImg'))$('sdImg').onclick=()=>{closeSh('shSend');envoyer(t)};
-$('sdWa').onclick=()=>{copyImage(t).then(ok=>{if(ok)toast('Image copiée : appui long → Coller dans la conversation')});markSent(t);closeSh('shSend')};
-$('sdSms').onclick=()=>{markSent(t);closeSh('shSend')}}
+$('sdWa').onclick=()=>{markSent(t);closeSh('shSend')};$('sdSms').onclick=()=>{markSent(t);closeSh('shSend')}}
 function drawAll(){drawClubs();drawPlan();drawSend()}
 generate(false);
 </script>
